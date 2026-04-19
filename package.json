@@ -1,0 +1,14 @@
+{
+  "name": "agency-rpfx",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:frontend": "npm run dev --prefix agency-travel",
+    "dev:cms": "npm run dev --prefix agency-baack-main",
+    "build": "npm run build --prefix agency-travel && npm run build --prefix agency-baack-main",
+    "build:frontend": "npm run build --prefix agency-travel",
+    "build:cms": "npm run build --prefix agency-baack-main",
+    "seed": "npm run seed --prefix agency-baack-main"
+  }
+}
