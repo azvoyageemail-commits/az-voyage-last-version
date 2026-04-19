@@ -99,7 +99,7 @@ const DateRangePicker = ({
     }
 
     return (
-      <div className="flex-1 min-w-[230px]">
+      <div className="flex-1 min-w-0">
         {/* Month header */}
         <div className="flex items-center justify-between mb-3">
           {isSameMonth(month, leftMonth) ? (
@@ -196,8 +196,8 @@ const DateRangePicker = ({
 
       {/* Calendar dropdown */}
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 bg-white border border-separator-90 rounded-xl shadow-lg p-5">
-          <div className="flex gap-6">
+        <div className="absolute z-50 top-full mt-1 bg-white border border-separator-90 rounded-xl shadow-lg p-4 sm:p-5 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] sm:w-auto sm:left-0 sm:translate-x-0 max-w-[560px]">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
             {renderMonth(leftMonth)}
             {renderMonth(rightMonth)}
           </div>

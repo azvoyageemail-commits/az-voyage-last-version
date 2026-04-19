@@ -1,8 +1,4 @@
-import type {
-  CollectionAfterChangeHook,
-  CollectionAfterDeleteHook,
-  CollectionConfig,
-} from "payload";
+import type { CollectionConfig } from "payload";
 
 const toSlug = (value: string) =>
   value
@@ -11,25 +7,6 @@ const toSlug = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-
-const normalizeRelationIds = (value: unknown): string[] => {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((entry) => {
-      if (typeof entry === "string" || typeof entry === "number") {
-        return String(entry);
-      }
-
-      if (entry && typeof entry === "object" && "id" in entry) {
-        const id = (entry as { id?: string | number | null }).id;
-        return id == null ? null : String(id);
-      }
-
-      return null;
-    })
-    .filter((id): id is string => Boolean(id));
-};
 
 const createOfferGallerySlot = (name: string, label: string) => ({
   name,
@@ -61,85 +38,6 @@ const inclusionIconOptions = [
   { label: "Calendrier", value: "calendar" },
 ];
 
-const syncOfferOnHotels = async (
-  req: Parameters<CollectionAfterChangeHook>[0]["req"],
-  offerId: string,
-  nextHotelIds: string[],
-  previousHotelIds: string[],
-) => {
-  const affectedHotelIds = Array.from(new Set([...nextHotelIds, ...previousHotelIds]));
-
-  for (const hotelId of affectedHotelIds) {
-    const hotelResult = await req.payload.find({
-      collection: "hotels",
-      limit: 1,
-      pagination: false,
-      req,
-      where: {
-        id: {
-          equals: hotelId,
-        },
-      },
-    });
-
-    const hotel = hotelResult.docs[0] as { offers?: unknown } | undefined;
-
-    if (!hotel) {
-      continue;
-    }
-
-    const currentOfferIds = normalizeRelationIds(hotel.offers);
-    const shouldIncludeOffer = nextHotelIds.includes(hotelId);
-    const nextOfferIds = shouldIncludeOffer
-      ? Array.from(new Set([...currentOfferIds, offerId]))
-      : currentOfferIds.filter((id) => id !== offerId);
-
-    const isUnchanged =
-      currentOfferIds.length === nextOfferIds.length &&
-      currentOfferIds.every((id, index) => id === nextOfferIds[index]);
-
-    if (isUnchanged) {
-      continue;
-    }
-
-    await req.payload.update({
-      collection: "hotels",
-      data: {
-        offers: nextOfferIds,
-      },
-      id: hotelId,
-      req,
-    });
-  }
-};
-
-const syncHotelsAfterOfferChange: CollectionAfterChangeHook = async ({
-  doc,
-  previousDoc,
-  req,
-}) => {
-  await syncOfferOnHotels(
-    req,
-    String(doc.id),
-    normalizeRelationIds((doc as { hotels?: unknown }).hotels),
-    normalizeRelationIds((previousDoc as { hotels?: unknown }).hotels),
-  );
-
-  return doc;
-};
-
-const removeOfferFromHotelsAfterDelete: CollectionAfterDeleteHook = async ({
-  doc,
-  req,
-}) => {
-  const offerId = String(doc.id);
-  const linkedHotelIds = normalizeRelationIds((doc as { hotels?: unknown }).hotels);
-
-  await syncOfferOnHotels(req, offerId, [], linkedHotelIds);
-
-  return doc;
-};
-
 export const Offers: CollectionConfig = {
   slug: "offers",
   admin: {
@@ -147,7 +45,7 @@ export const Offers: CollectionConfig = {
     defaultColumns: ["title", "destination", "country", "price", "status"],
   },
   access: {
-    read: () => true, // Public read
+    read: () => true,
   },
   fields: [
     /* ── Core identity ── */
@@ -194,7 +92,6 @@ export const Offers: CollectionConfig = {
       name: "flagUrl",
       type: "text",
       label: "URL du drapeau (fallback)",
-      admin: { description: "URL de l'image si vous n'uploadez pas de fichier" },
     },
     {
       name: "region",
@@ -234,7 +131,6 @@ export const Offers: CollectionConfig = {
       name: "mainImageUrl",
       type: "text",
       label: "Image URL (fallback)",
-      admin: { description: "Used when no uploaded image is available" },
     },
     {
       name: "detailGallery",
@@ -255,10 +151,6 @@ export const Offers: CollectionConfig = {
       name: "galleryImages",
       type: "array",
       label: "Galerie photos (fallback)",
-      admin: {
-        description:
-          "Utilisee seulement en fallback si la galerie detail ci-dessus n'est pas remplie.",
-      },
       fields: [
         {
           name: "image",
@@ -307,18 +199,19 @@ export const Offers: CollectionConfig = {
       admin: { description: 'e.g. "7 Jours"' },
     },
 
-    /* ── Pricing ── */
+    /* ── Pricing global ── */
     {
       name: "price",
       type: "text",
       required: true,
-      label: "Prix par adulte (Affiché)",
-      admin: { description: 'e.g. "84 000"' },
+      label: "Prix affiché (général)",
+      admin: { description: 'Prix affiché sur la carte de l\'offre. e.g. "84 000"' },
     },
     {
       name: "priceAmount",
       type: "number",
-      label: "Prix par adulte (Numérique)",
+      label: "Prix (numérique général)",
+      admin: { description: "Prix de base de l'offre sans hôtel spécifique." },
     },
     {
       name: "currency",
@@ -326,27 +219,71 @@ export const Offers: CollectionConfig = {
       defaultValue: "DZD",
       label: "Devise",
     },
+
+    /* ── Hotels avec prix par hôtel ── */
     {
-      name: "childrenPricing",
+      name: "hotels",
       type: "array",
-      label: "Tarification enfants (par tranche d'âge)",
+      label: "Hôtels disponibles",
       admin: {
-        description: "Définissez les différentes tranches d'âge et leurs tarifs respectifs. Ex: '5 ans — 11 ans — 60 000 DA'",
+        description: "Associez un hôtel à cette offre et définissez son prix directement ici.",
       },
       fields: [
         {
-          name: "label",
-          type: "text",
+          name: "hotel",
+          type: "relationship",
+          relationTo: "hotels",
           required: true,
-          label: "Label de la tranche d'âge",
-          admin: { description: "Ex: '5 ans — 11 ans — 60 000 DA'" },
+          label: "Hôtel",
+        },
+        {
+          name: "priceLabel",
+          type: "text",
+          label: "Prix adulte affiché",
+          admin: { description: 'e.g. "84 000 DA"' },
         },
         {
           name: "priceAmount",
           type: "number",
-          required: true,
-          label: "Prix (numérique)",
-          admin: { description: "Ex: 60000" },
+          label: "Prix adulte (numérique)",
+          admin: { description: "Utilisé pour les calculs de réservation." },
+        },
+        {
+          name: "childPriceBrackets",
+          type: "array",
+          label: "Tarifs enfants par tranche d'âge",
+          labels: { singular: "Tranche", plural: "Tranches" },
+          fields: [
+            {
+              name: "label",
+              type: "text",
+              required: true,
+              label: "Libellé",
+              admin: { description: 'Ex: "2 – 4 ans"' },
+            },
+            {
+              name: "minAge",
+              type: "number",
+              label: "Âge min (mois)",
+            },
+            {
+              name: "maxAge",
+              type: "number",
+              label: "Âge max (mois)",
+            },
+            {
+              name: "priceAmount",
+              type: "number",
+              required: true,
+              label: "Prix (numérique)",
+            },
+            {
+              name: "priceLabel",
+              type: "text",
+              label: "Prix affiché",
+              admin: { description: 'Ex: "15 000 DA"' },
+            },
+          ],
         },
       ],
     },
@@ -362,7 +299,6 @@ export const Offers: CollectionConfig = {
       name: "badge",
       type: "text",
       label: "Badge",
-      admin: { description: 'e.g. "Bientôt complet", "Sold out"' },
     },
     {
       name: "badgeVariant",
@@ -395,10 +331,7 @@ export const Offers: CollectionConfig = {
       type: "checkbox",
       defaultValue: true,
       label: "Afficher sur la page d'accueil",
-      admin: {
-        position: "sidebar",
-        description: "Cochez pour afficher cette offre dans la section Offres du moment",
-      },
+      admin: { position: "sidebar" },
     },
 
     /* ── Detail page fields ── */
@@ -406,57 +339,41 @@ export const Offers: CollectionConfig = {
       name: "departureLocation",
       type: "text",
       label: "Lieu de départ",
-      admin: { description: 'e.g. "Départ aéroport Houari Boumediene, Alger"' },
     },
     {
       name: "location",
       type: "text",
       label: "Lieu / Adresse",
-      admin: { description: 'e.g. "Istanbul, Turquie"' },
     },
     {
       name: "time",
       type: "text",
       label: "Heure",
-      admin: { description: 'e.g. "08:00 - Départ" or "Matin"' },
     },
     {
       name: "metaDates",
       type: "text",
       label: "Dates détaillées",
-      admin: { description: 'e.g. "18-25 janvier 2026"' },
     },
     {
       name: "metaDuration",
       type: "text",
       label: "Durée détaillée",
-      admin: { description: 'e.g. "7 nuits"' },
     },
     {
       name: "priceSummary",
       type: "textarea",
       label: "Résumé du prix",
-      admin: {
-        description: "Text shown in the price sidebar",
-      },
     },
     {
       name: "priceCard",
       type: "group",
       label: "Carte tarifaire (sidebar)",
-      admin: {
-        description:
-          "Controle les textes affiches dans la carte de reservation a droite sur la page detail de l'offre.",
-      },
       fields: [
         {
           name: "description",
           type: "textarea",
           label: "Description en haut de la carte",
-          admin: {
-            description:
-              "Texte affiché dans la zone supérieure de la carte tarifaire, au-dessus de 'Voyageurs'.",
-          },
         },
         {
           name: "travellersLabel",
@@ -475,9 +392,6 @@ export const Offers: CollectionConfig = {
           name: "travellersText",
           type: "text",
           label: "Texte voyageurs",
-          admin: {
-            description: 'Ex: "1 adulte". Si vide, il sera genere depuis le nombre d\'adultes.',
-          },
         },
         {
           name: "detailsTitle",
@@ -509,7 +423,6 @@ export const Offers: CollectionConfig = {
       name: "numberOfDays",
       type: "number",
       label: "Nombre de jours",
-      admin: { description: "Nombre de jours du programme (affiché sur la page détails)" },
     },
 
     /* ── Inclusions ── */
@@ -517,10 +430,6 @@ export const Offers: CollectionConfig = {
       name: "inclusions",
       type: "array",
       label: "Inclusions",
-      admin: {
-        description:
-          "Chaque ligne peut definir le texte affiche dans 'Ce qui est inclus' ainsi que son icone.",
-      },
       fields: [
         {
           name: "item",
@@ -560,8 +469,6 @@ export const Offers: CollectionConfig = {
         plural: "Jours du programme",
       },
       admin: {
-        description:
-          "Ajoutez ici le programme specifique de cette offre : jour, titre, description, lieux, repas et photos.",
         initCollapsed: true,
       },
       fields: [
@@ -587,13 +494,7 @@ export const Offers: CollectionConfig = {
           name: "locations",
           type: "array",
           label: "Lieux visités",
-          fields: [
-            {
-              name: "place",
-              type: "text",
-              required: true,
-            },
-          ],
+          fields: [{ name: "place", type: "text", required: true }],
         },
         {
           name: "meals",
@@ -613,16 +514,8 @@ export const Offers: CollectionConfig = {
           type: "array",
           label: "Photos du jour",
           fields: [
-            {
-              name: "image",
-              type: "upload",
-              relationTo: "media",
-            },
-            {
-              name: "imageUrl",
-              type: "text",
-              label: "Image URL (fallback)",
-            },
+            { name: "image", type: "upload", relationTo: "media" },
+            { name: "imageUrl", type: "text", label: "Image URL (fallback)" },
           ],
         },
         {
@@ -632,19 +525,6 @@ export const Offers: CollectionConfig = {
           label: "Dernier jour ?",
         },
       ],
-    },
-
-    /* ── Hotels relationship ── */
-    {
-      name: "hotels",
-      type: "relationship",
-      relationTo: "hotels",
-      hasMany: true,
-      label: "Hôtels disponibles",
-      admin: {
-        description:
-          "Sélectionnez uniquement des hôtels déjà créés dans la collection Hotels. Si aucun hôtel n'existe encore, laissez ce champ vide.",
-      },
     },
   ],
 
@@ -659,7 +539,5 @@ export const Offers: CollectionConfig = {
         return data;
       },
     ],
-    afterChange: [syncHotelsAfterOfferChange],
-    afterDelete: [removeOfferFromHotelsAfterDelete],
   },
 };

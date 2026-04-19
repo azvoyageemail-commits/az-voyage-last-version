@@ -38,7 +38,19 @@ export interface HotelData {
   breakfastIncluded?: boolean;
   offers?: Array<string | { id?: string; slug?: string; destination?: string }>;
 }
-
+export interface HotelEntry {
+  id?: string;
+  hotel: HotelData;
+  priceLabel?: string;
+  priceAmount?: number;
+  childPriceBrackets?: Array<{
+    label: string;
+    minAge?: number;
+    maxAge?: number;
+    priceAmount: number;
+    priceLabel?: string;
+  }>;
+}
 type MediaReference = string | { url?: string } | null | undefined;
 type OfferGallerySlot = {
   image?: MediaReference;
@@ -104,7 +116,7 @@ export interface OfferDetailData {
     images?: Array<{ image?: { url?: string }; imageUrl?: string }>;
     isLast?: boolean;
   }>;
-  hotels?: HotelData[];
+  hotels?: HotelEntry[];
 }
 
 const hydrateMediaReference = async (
@@ -257,10 +269,11 @@ export function getOfferGalleryUrls(
  * Resolve hotel image URLs.
  */
 export function getHotelImageUrls(
-  hotel: OfferDetailData["hotels"] extends (infer H)[] ? H : never,
+  hotelEntry: HotelEntry | HotelData,
 ): string[] {
-  const main = resolveImageUrl((hotel as any).mainImage, (hotel as any).mainImageUrl);
-  const gallery = resolveGalleryUrls((hotel as any).images);
+  const hotel = "hotel" in hotelEntry ? hotelEntry.hotel : hotelEntry;
+  const main = resolveImageUrl(hotel.mainImage, hotel.mainImageUrl);
+  const gallery = resolveGalleryUrls(hotel.images);
   return [main, ...gallery].filter(Boolean);
 }
 

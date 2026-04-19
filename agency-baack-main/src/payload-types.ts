@@ -233,9 +233,6 @@ export interface Offer {
    */
   flag?: string | null;
   flagMedia?: (string | null) | Media;
-  /**
-   * URL de l'image si vous n'uploadez pas de fichier
-   */
   flagUrl?: string | null;
   region?: ('Turquie' | 'Europe' | 'Moyen-Orient' | 'Asie' | 'Afrique' | 'Océanie' | 'Omra') | null;
   shortDescription?: string | null;
@@ -255,9 +252,6 @@ export interface Offer {
     [k: string]: unknown;
   } | null;
   mainImage?: (string | null) | Media;
-  /**
-   * Used when no uploaded image is available
-   */
   mainImageUrl?: string | null;
   /**
    * Les 4 images affichees sur la page detail de l'offre : 1 grande image + 3 images laterales.
@@ -280,9 +274,6 @@ export interface Offer {
       imageUrl?: string | null;
     };
   };
-  /**
-   * Utilisee seulement en fallback si la galerie detail ci-dessus n'est pas remplie.
-   */
   galleryImages?:
     | {
         image?: (string | null) | Media;
@@ -303,24 +294,44 @@ export interface Offer {
    */
   duration?: string | null;
   /**
-   * e.g. "84 000"
+   * Prix affiché sur la carte de l'offre. e.g. "84 000"
    */
   price: string;
+  /**
+   * Prix de base de l'offre sans hôtel spécifique.
+   */
   priceAmount?: number | null;
   currency?: string | null;
   /**
-   * Définissez les différentes tranches d'âge et leurs tarifs respectifs. Ex: '5 ans — 11 ans — 60 000 DA'
+   * Associez un hôtel à cette offre et définissez son prix directement ici.
    */
-  childrenPricing?:
+  hotels?:
     | {
+        hotel: string | Hotel;
         /**
-         * Ex: '5 ans — 11 ans — 60 000 DA'
+         * e.g. "84 000 DA"
          */
-        label: string;
+        priceLabel?: string | null;
         /**
-         * Ex: 60000
+         * Utilisé pour les calculs de réservation.
          */
-        priceAmount: number;
+        priceAmount?: number | null;
+        childPriceBrackets?:
+          | {
+              /**
+               * Ex: "2 – 4 ans"
+               */
+              label: string;
+              minAge?: number | null;
+              maxAge?: number | null;
+              priceAmount: number;
+              /**
+               * Ex: "15 000 DA"
+               */
+              priceLabel?: string | null;
+              id?: string | null;
+            }[]
+          | null;
         id?: string | null;
       }[]
     | null;
@@ -328,66 +339,27 @@ export interface Offer {
    * e.g. "Coup de coeur", "Nouveau"
    */
   tag?: string | null;
-  /**
-   * e.g. "Bientôt complet", "Sold out"
-   */
   badge?: string | null;
   badgeVariant?: ('info' | 'warning' | 'danger') | null;
   status?: ('available' | 'almost-full' | 'sold-out') | null;
-  /**
-   * Cochez pour afficher cette offre dans la section Offres du moment
-   */
   showOnHomepage?: boolean | null;
-  /**
-   * e.g. "Départ aéroport Houari Boumediene, Alger"
-   */
   departureLocation?: string | null;
-  /**
-   * e.g. "Istanbul, Turquie"
-   */
   location?: string | null;
-  /**
-   * e.g. "08:00 - Départ" or "Matin"
-   */
   time?: string | null;
-  /**
-   * e.g. "18-25 janvier 2026"
-   */
   metaDates?: string | null;
-  /**
-   * e.g. "7 nuits"
-   */
   metaDuration?: string | null;
-  /**
-   * Text shown in the price sidebar
-   */
   priceSummary?: string | null;
-  /**
-   * Controle les textes affiches dans la carte de reservation a droite sur la page detail de l'offre.
-   */
   priceCard?: {
-    /**
-     * Texte affiché dans la zone supérieure de la carte tarifaire, au-dessus de 'Voyageurs'.
-     */
     description?: string | null;
     travellersLabel?: string | null;
     defaultAdults?: number | null;
-    /**
-     * Ex: "1 adulte". Si vide, il sera genere depuis le nombre d'adultes.
-     */
     travellersText?: string | null;
     detailsTitle?: string | null;
     totalLabel?: string | null;
     reserveButtonLabel?: string | null;
     confirmationText?: string | null;
   };
-  /**
-   * Nombre de jours du programme (affiché sur la page détails)
-   */
   numberOfDays?: number | null;
-  /**
-   * Chaque ligne peut definir le texte affiche dans 'Ce qui est inclus' ainsi que son icone.
-   */
   inclusions?:
     | {
         item: string;
@@ -401,9 +373,6 @@ export interface Offer {
         id?: string | null;
       }[]
     | null;
-  /**
-   * Ajoutez ici le programme specifique de cette offre : jour, titre, description, lieux, repas et photos.
-   */
   program?:
     | {
         /**
@@ -438,10 +407,6 @@ export interface Offer {
         id?: string | null;
       }[]
     | null;
-  /**
-   * Sélectionnez uniquement des hôtels déjà créés dans la collection Hotels. Si aucun hôtel n'existe encore, laissez ce champ vide.
-   */
-  hotels?: (string | Hotel)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -456,9 +421,6 @@ export interface Hotel {
    * Description courte de l'hôtel
    */
   description?: string | null;
-  /**
-   * Nombre d'étoiles de l'hôtel
-   */
   stars?: number | null;
   rating?: number | null;
   address?: string | null;
@@ -469,49 +431,9 @@ export interface Hotel {
    */
   dates?: string | null;
   /**
-   * e.g. "84 000"
-   */
-  price?: string | null;
-  priceAmount?: number | null;
-  currency?: string | null;
-  pricePerPerson?: string | null;
-  /**
-   * Sélectionnez une ou plusieurs offres où cet hôtel doit apparaître côté frontend.
+   * Géré automatiquement depuis la collection Offres. Ne pas modifier ici.
    */
   offers?: (string | Offer)[] | null;
-  /**
-   * Champ obsolète — utilisez les tranches d'âge ci-dessous.
-   */
-  childPrice?: string | null;
-  /**
-   * Champ obsolète — utilisez les tranches d'âge ci-dessous.
-   */
-  childPriceAmount?: number | null;
-  /**
-   * Définissez le prix enfant par tranche d'âge (ex: 1 mois–1 an 10 mois, 2–4 ans, 5–11 ans).
-   */
-  childPriceBrackets?:
-    | {
-        /**
-         * Ex: "1 mois – 1 an 10 mois"
-         */
-        label: string;
-        /**
-         * Âge minimum en mois
-         */
-        minAge?: number | null;
-        /**
-         * Âge maximum en mois
-         */
-        maxAge?: number | null;
-        priceAmount: number;
-        /**
-         * Ex: "15 000 DA"
-         */
-        priceLabel?: string | null;
-        id?: string | null;
-      }[]
-    | null;
   mainImage?: (string | null) | Media;
   mainImageUrl?: string | null;
   images?:
@@ -1077,11 +999,22 @@ export interface OffersSelect<T extends boolean = true> {
   price?: T;
   priceAmount?: T;
   currency?: T;
-  childrenPricing?:
+  hotels?:
     | T
     | {
-        label?: T;
+        hotel?: T;
+        priceLabel?: T;
         priceAmount?: T;
+        childPriceBrackets?:
+          | T
+          | {
+              label?: T;
+              minAge?: T;
+              maxAge?: T;
+              priceAmount?: T;
+              priceLabel?: T;
+              id?: T;
+            };
         id?: T;
       };
   tag?: T;
@@ -1149,7 +1082,6 @@ export interface OffersSelect<T extends boolean = true> {
         isLast?: T;
         id?: T;
       };
-  hotels?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1288,23 +1220,7 @@ export interface HotelsSelect<T extends boolean = true> {
   city?: T;
   country?: T;
   dates?: T;
-  price?: T;
-  priceAmount?: T;
-  currency?: T;
-  pricePerPerson?: T;
   offers?: T;
-  childPrice?: T;
-  childPriceAmount?: T;
-  childPriceBrackets?:
-    | T
-    | {
-        label?: T;
-        minAge?: T;
-        maxAge?: T;
-        priceAmount?: T;
-        priceLabel?: T;
-        id?: T;
-      };
   mainImage?: T;
   mainImageUrl?: T;
   images?:

@@ -13,6 +13,7 @@ import {
   getOfferGalleryUrls,
   getHotelImageUrls,
   getOfferMainImageUrl,
+  type HotelEntry,
   type HotelData,
 } from "@/hooks/useOffer";
 import { resolveGalleryUrls } from "@/lib/payload";
@@ -48,30 +49,34 @@ type HotelDisplayData = {
 };
 
 const mapHotelToDisplayData = (
-  hotel: HotelData,
+  hotelEntry: HotelEntry | HotelData,
   metaDates: string,
   pricePerAdult: string,
   currency: string,
-): HotelDisplayData => ({
-  id: hotel.id,
-  name: hotel.name,
-  description: hotel.description,
-  stars: hotel.stars,
-  images: getHotelImageUrls(hotel),
-  dates: hotel.dates ?? metaDates,
-  price: hotel.price ?? pricePerAdult,
-  priceAmount: hotel.priceAmount,
-  pricePerPerson: hotel.pricePerPerson ?? hotel.price ?? pricePerAdult,
-  childPrice: hotel.childPrice ?? hotel.pricePerPerson ?? hotel.price ?? pricePerAdult,
-  childPriceAmount: hotel.childPriceAmount ?? hotel.priceAmount,
-  childPriceBrackets: hotel.childPriceBrackets,
-  currency: hotel.currency ?? currency,
-  rating: hotel.rating,
-  address: hotel.address,
-  amenities: hotel.amenities?.map((a) => a.item),
-  transferIncluded: hotel.transferIncluded === true,
-  breakfastIncluded: hotel.breakfastIncluded === true,
-});
+): HotelDisplayData => {
+  const hotel = "hotel" in hotelEntry ? hotelEntry.hotel : hotelEntry;
+
+  return {
+    id: hotel.id,
+    name: hotel.name,
+    description: hotel.description,
+    stars: hotel.stars,
+    images: getHotelImageUrls(hotel),
+    dates: hotel.dates ?? metaDates,
+    price: hotel.price ?? pricePerAdult,
+    priceAmount: hotel.priceAmount,
+    pricePerPerson: hotel.pricePerPerson ?? hotel.price ?? pricePerAdult,
+    childPrice: hotel.childPrice ?? hotel.pricePerPerson ?? hotel.price ?? pricePerAdult,
+    childPriceAmount: hotel.childPriceAmount ?? hotel.priceAmount,
+    childPriceBrackets: hotel.childPriceBrackets,
+    currency: hotel.currency ?? currency,
+    rating: hotel.rating,
+    address: hotel.address,
+    amenities: hotel.amenities?.map((a) => a.item),
+    transferIncluded: hotel.transferIncluded === true,
+    breakfastIncluded: hotel.breakfastIncluded === true,
+  };
+};
 
 const OfferDetailContent = () => {
   const { id } = useParams<{ id: string }>();
@@ -162,9 +167,20 @@ const OfferDetailContent = () => {
   const hasLeftContent =
     inclusionEntries.length > 0 || exclusionLabels.length > 0 || programDays.length > 0;
 
-  const directHotels = offer.hotels ?? [];
-  const hotels: HotelDisplayData[] = (directHotels.length > 0 ? directHotels : inferredHotels)
-    .map((hotel) => mapHotelToDisplayData(hotel, metaDates, pricePerAdult, currency));
+  const directHotels = (offer.hotels ?? []) as HotelEntry[];
+  const hotels: HotelDisplayData[] = (
+    directHotels.length > 0
+      ? directHotels.map((entry) => ({
+          ...entry.hotel,
+          // prix venant de l'offre, pas de l'hôtel
+          price: entry.priceLabel ?? entry.hotel.price ?? pricePerAdult,
+          priceAmount: entry.priceAmount ?? entry.hotel.priceAmount,
+          childPriceBrackets: entry.childPriceBrackets?.length
+            ? entry.childPriceBrackets
+            : entry.hotel.childPriceBrackets,
+        }))
+      : inferredHotels
+  ).map((hotel) => mapHotelToDisplayData(hotel, metaDates, pricePerAdult, currency));
   const reservationHotels =
     hotels.length > 0
       ? hotels.map((h) => ({
